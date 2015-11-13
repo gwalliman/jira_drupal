@@ -28,6 +28,21 @@ function jira_drupal_jira_rest_get_transitions($issuekey)
   return jira_drupal_jira_rest_get('/issue/' . $issuekey . '/transitions');
 }
 
+function jira_drupal_jira_rest_get_projects()
+{
+  return jira_drupal_jira_rest_get('/project');
+}
+
+function jira_drupal_jira_rest_get_issuetypes()
+{
+  return jira_drupal_jira_rest_get('/issuetype');
+}
+
+function jira_drupal_jira_search_issues($jql)
+{
+  return jira_drupal_jira_rest_get("/search?jql=$jql");
+}
+
 function jira_drupal_jira_rest_get_transition($issuekey, $status_id)
 {
   $transitions = jira_drupal_jira_rest_get('/issue/' . $issuekey . '/transitions');
@@ -38,6 +53,18 @@ function jira_drupal_jira_rest_get_transition($issuekey, $status_id)
       return $t;
     }
   }
+}
+
+function jira_drupal_jira_rest_get_project_issuetype_fields($projectid, $issuetypeid)
+{
+  $metadata = drupal_json_decode(jira_drupal_jira_rest_get("/issue/createmeta?projectIds=$projectid&issuetypeIds=$issuetypeid&expand=projects.issuetypes.fields"));
+  $fields = $metadata['projects'][0]['issuetypes'][0]['fields'];
+  return $fields;
+}
+
+function jira_drupal_jira_rest_search_user($searchstring)
+{
+  return jira_drupal_jira_rest_get('/user/search?username=' . $searchstring);
 }
 
 function jira_drupal_sfe_status_labels()
@@ -71,23 +98,6 @@ function jira_drupal_sfe_statuses()
     if($status->name == 'New Development')
     {
       return $status->statuses;
-    }
-  }
-}
-
-function jira_drupal_sfe_fields()
-{
-  //TODO: comments
-  $projects = jira_drupal_jira_rest_get('/issue/createmeta?projectKeys=SFE&expand=projects.issuetypes.fields');
-  $issuetypes = $projects->projects['0']->issuetypes;
-  foreach($issuetypes as $issue)
-  {
-    if($issue->name == 'Salesforce Development ')
-    {
-      $fields = $issue->fields;
-      unset($fields->project);
-      unset($fields->issuetype);
-      return $fields;
     }
   }
 }

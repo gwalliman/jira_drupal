@@ -1,1 +1,119 @@
 <?php
+module_load_include('inc', 'jira_drupal', 'jira_drupal.helpers');
+module_load_include('inc', 'jira_drupal', 'jira_drupal.api');
+
+function jira_drupal_menu()
+{
+  $items = array();
+  $items['jira_drupal/new_epic'] = array(
+    'title' => 'Create New Epic',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('jira_drupal_new_epic'),
+    'access callback' => TRUE,
+  );
+  $items['admin/config/jira_drupal'] = array(
+    'title' => 'Configure JIRA Drupal',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('jira_drupal_admin_config'),
+    'access arguments' => array('administrator'),
+    'file' => 'jira_drupal.admin.inc',
+  );
+
+ return $items;
+}
+
+function jira_drupal_new_epic($form, $form_state)
+{
+  $form = array();
+  $fields = jira_drupal_jira_rest_get_project_issuetype_fields(variable_get('jira_drupal_jira_project'), variable_get('jira_drupal_jira_issuetype'));
+
+  unset($fields['project']);
+  unset($fields['issuetype']);
+  unset($fields['timetracking']);
+  unset($fields['customfield_12260']);
+  unset($fields['customfield_13760']);
+  unset($fields['customfield_10050']);
+  unset($fields['customfield_10163']);
+  unset($fields['customfield_10860']);
+  unset($fields['labels']);
+  unset($fields['environment']);
+  unset($fields['attachment']);
+  unset($fields['versions']);
+  unset($fields['assignee']);
+  unset($fields['fixVersions']);
+
+  foreach($fields as $key => $f)
+  {
+    if(isset($f['schema']['type']) && !empty($f['schema']['type']))
+    {
+      $function = 'jira_drupal_build_field_' . $f['schema']['type'];
+      if(function_exists($function))
+      {
+        $form[$key] = $function($key, $f, array());
+      }
+    }
+  }
+
+  //'#description' => 'Enter a JIRA Username or Email address. If you enter nothing or if what you enter doesn\'t match any JIRA users, "JIRA Reporter" will be assigned',
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit',
+  );
+
+  return $form;
+}
+
+function jira_drupal_new_epic_submit($form, $form_state)
+{
+  try
+  {
+    $has_attachment = FALSE;
+
+    $project_id = variable_get('jira_drupal_jira_project');
+    $issuetype_id = variable_get('jira_drupal_jira_issuetype');
+
+    $form_values = $form_state['values'];
+
+    $fields = array(
+      "fields" => array(
+        "project" => array('id' => $project_id),
+        "issuetype" => array("id" => $issuetype_id),
+      ),
+    );
+
+    $field_list = jira_drupal_jira_rest_get_project_issuetype_fields(variable_get('jira_drupal_jira_project'), variable_get('jira_drupal_jira_issuetype'));
+
+    foreach($field_list as $key => $f)
+    {
+      $function = 'jira_drupal_submit_field_' . $f['schema']['type'];
+      if(isset($form_values[$key]) && !empty($form_values[$key]))
+      {
+        $fields['fields'][$key] = $function($form_values[$key], $f);
+      }
+    }
+
+    $username = variable_get('jira_rest_username');
+    $password = variable_get('jira_rest_password');
+
+    $result = jira_rest_createissue($username, $password, $fields);
+  }
+  catch(Exception $e)
+  {
+    $error = "Experienced an error when trying to CREATE a new JIRA issue. Error follows: " . $e->getMessage();
+    dpm($error);
+    watchdog('ASU Connections', $error);
+  }
+}
+
+function jira_drupal_list_user_epics()
+{
+  global $user;
+  $username = $user->name;
+
+  $project_id = variable_get('jira_drupal_jira_project');
+  $issuetype_id = variable_get('jira_drupal_jira_issuetype');
+
+  $epics = jira_drupal_jira_search_issues("project=$project_id+AND+issuetype=$issuetype_id+AND+reporter=$username");
+  dpm($epics);
+}
